@@ -1,109 +1,103 @@
-# Import des bibliothèques 
+# Import libraries 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt 
 import plotly.graph_objs as go
 import statsmodels.api as sm
-# Outils pour tests de stationnarité et modèles VAR
+# Tools for stationarity tests and VAR models
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.vector_ar.var_model import VAR
-# Pour télécharger les données financières
+# To download financial data
 import yfinance as yf 
-# Pour évaluer la qualité des prévisions
+# To evaluate forecast quality
 from sklearn.metrics import mean_squared_error
 
-
-
-
-#1 - Téléchargement des données 
-# On télécharge les données mensuelles de BNP Paribas et de l'ETF VGK entre 2014 et 2019
+# 1. Data Download 
+# Download monthly data for BNP Paribas and VGK ETF between 2014 and 2019
 bnp = yf.download('BNP.PA', start='2014-01-01', end='2019-12-31', interval='1mo')
 vgk = yf.download('VGK', start='2014-01-01', end='2019-12-31', interval='1mo')
-# On concatène les colonnes Close des deux séries en les alignant sur leurs dates communes
+# Concatenate 'Close' columns of both series, aligning them on common dates
 data = pd.concat([bnp['Close'], vgk['Close']], axis=1)
 data.columns = ['BNP', 'VGK']
 data = data.dropna()
 
-
-# 2. Transformation logarithmique et calcul des rendements
+# 2. Logarithmic transformation and return calculation
 log_data = np.log(data)
-# On calcule les rendements log : différence du log
+# Calculate log returns: difference of logs
 returns = log_data.diff().dropna()
 
-# 3. Test de stationnarité ADF
-# Fonction pour effectuer le test ADF et afficher les résultats
+# 3. ADF Stationarity Test
+# Function to perform ADF test and print results
 def run_adf(series, name):
     result = adfuller(series)
-    print(f"\nADF Test pour {name}")
-    print(f"Statistique ADF : {result[0]}")
-    print(f"p-value : {result[1]}")
-    print("Conclusion :", "Stationnaire" if result[1] < 0.05 else "Non stationnaire")
+    print(f"\nADF Test for {name}")
+    print(f"ADF Statistic: {result[0]}")
+    print(f"p-value: {result[1]}")
+    print("Conclusion:", "Stationary" if result[1] < 0.05 else "Non-stationary")
 
-# Application du test ADF sur les rendements
+# Apply ADF test on returns
 run_adf(returns['BNP'], "BNP")
 run_adf(returns['VGK'], "VGK")
 
-
-
 # ================================
-# 4. Estimation du modèle VAR
+# 4. VAR Model Estimation
 # ================================
 
-# On crée un modèle VAR à partir des rendements log
+# Create a VAR model from log returns
 model = VAR(returns)
 
-# Estimation du modèle avec 2 retards (ordre p=2, comme dans ton rapport)
+# Estimate model with 2 lags (order p=2)
 results = model.fit(2)
 
-# Affichage du résumé du modèle VAR
-print("\nRésumé du modèle VAR :")
+# Display VAR model summary
+print("\nVAR Model Summary:")
 print(results.summary())
 
 # ================================
-# 5. Prévision à horizon 2 périodes
+# 5. Forecasting with a 2-period horizon
 # ================================
 
-# On utilise les 2 dernières observations pour faire les prévisions
+# Use the last 2 observations for forecasting
 forecast = results.forecast(returns.values[-2:], steps=2)
 
-# On stocke les résultats dans un DataFrame pour lisibilité
+# Store results in a DataFrame for readability
 forecast_df = pd.DataFrame(forecast, columns=['BNP_forecast', 'VGK_forecast'])
-print("\nPrévision des rendements log à 2 pas :")
+print("\nLog returns forecast (2 steps):")
 print(forecast_df)
 
 # ================================
-# 6. Conversion en niveaux de prix
+# 6. Conversion to price levels
 # ================================
 
-# Derniers prix observés
+# Last observed prices
 last_prices = data.iloc[-1]
 
-# On cumule les rendements prévus pour obtenir le log-prix
+# Accumulate forecasted returns to get log prices
 predicted_log_returns = forecast_df.cumsum()
 
-# On reconvertit en prix (exponentielle du log)
+# Convert back to prices (exponential of log)
 predicted_prices = last_prices.values * np.exp(predicted_log_returns)
 
-# Affichage des prix prévus
-print("\nPrix prévus :")
+# Display forecasted prices
+print("\nForecasted Prices:")
 print(pd.DataFrame(predicted_prices, columns=data.columns))
 
 # ================================
-# 7. (Optionnel) Évaluation avec RMSE
+# 7. (Optional) Evaluation with RMSE
 # ================================
 
-# Si tu as les vraies valeurs futures, tu peux comparer ici
+# If you have actual future values, compare here
 # rmse_bnp = mean_squared_error(y_true, y_pred_bnp, squared=False)
 # rmse_vgk = mean_squared_error(y_true, y_pred_vgk, squared=False)
 
 # ================================
-# 8. Fonctions de réponse impulsionnelle (IRF)
+# 8. Impulse Response Functions (IRF)
 # ================================
 
-# On calcule les IRF sur 10 périodes
+# Calculate IRFs over 10 periods
 irf = results.irf(10)
 
-# Affichage des IRFs
+# Plot IRFs
 irf.plot(orth=False)
 plt.tight_layout()
 plt.show()
